@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soil and Plant Water Footprint Calculator</title>
+    <link rel="stylesheet" href="style.css" />
+    <script type="importmap">
+        {
+          "imports": {
+            "@google/generative-ai": "https://esm.run/@google/generative-ai"
+          }
+        }
+      </script>
+      <script type="module" src="script.js"></script>
+    <style>
+      body {
+        background-color: #f5f9fc;
+        font-family: "Arial", sans-serif;
+        margin: 0;
+        padding: 0;
+        color: #333;
+      }
+
+      .container {
+        max-width: 500px;
+        margin: 50px auto;
+        padding: 20px;
+        background-color: #ffffff;
+        border-radius: 10px;
+        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+      }
+
+      h1 {
+        text-align: center;
+        color: #4a90e2;
+        font-size: 1.8rem;
+        margin-bottom: 20px;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: bold;
+        color: #555;
+      }
+
+      select,
+      input {
+        width: 100%;
+        padding: 10px;
+        margin-bottom: 20px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        font-size: 1rem;
+        background-color: #f9fbfc;
+      }
+
+      select:disabled,
+      input:disabled {
+        background-color: #eaeff2;
+        color: #aaa;
+      }
+
+      button {
+        display: block;
+        width: 100%;
+        padding: 12px;
+        font-size: 1rem;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+
+      button:hover {
+        background-color: #43a047;
+      }
+
+      .output {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #e8f5e9;
+        border-left: 5px solid #4caf50;
+        border-radius: 5px;
+        color: #333;
+        font-size: 1rem;
+      }
+
+      /* Responsive adjustments */
+      @media (max-width: 600px) {
+        .container {
+          width: 90%;
+          padding: 15px;
+        }
+
+        h1 {
+          font-size: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Water Footprint Calculator</h1>
+
+      <label for="soilType">Select Soil Type:</label>
+      <select id="soilType">
+        <option value="">--Select Soil Type--</option>
+      </select>
+
+      <label for="climateType">Select Climate Type:</label>
+      <select id="climateType" disabled>
+        <option value="">--Select Climate--</option>
+      </select>
+
+      <label for="plantName">Select Plant Name:</label>
+      <select id="plantName" disabled>
+        <option value="">--Select Plant--</option>
+      </select>
+
+      <label for="landArea">Enter Area of Land (in m²):</label>
+      <input
+        type="number"
+        id="landArea"
+        placeholder="Enter area in square meters"
+      />
+
+      <button id="calculate">Calculate Water Footprint</button>
+
+      <div class="output" id="output"></div>
+
+      <div id="chat-widget-container">
+        <div id="chat-widget">
+          <div id="chat-header">
+            Chat with Us!
+            <span id="close-chat">×</span>
+          </div>
+          <div id="chat-body">
+            <div id="chat-messages"></div>
+          </div>
+          <div id="chat-input-container">
+            <input type="text" id="chat-input" placeholder="Type your message..." />
+            <button id="send-btn" style="width: 20%; height: 70%">Send</button>
+            <button id="stop-btn" style="display: none">Stop</button>
+            <input type="file" id="image-upload" accept="image/*" style="display: none;" />
+            <button id="upload-btn" style="width: 20%; height: 70%">📷</button>
+          </div>
+          
+        </div>
+        <!-- Chat Toggle Button -->
+        <div id="chat-toggle">
+          <button id="open-chat">Chat</button>
+        </div>
+      </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.3/xlsx.full.min.js"></script>
+    <script>
+      let soilData = {};
+      let climateData = {};
+      let waterFootprintData = {};
+      let soilRetentionData = {};
+      let humidityData = {};
+
+      function loadExcelData() {
+        const url = "Indian_Soil_Water_Footprint_Expanded_Dataset_10k.xlsx";
+
+        fetch(url)
+          .then((response) => response.arrayBuffer())
+          .then((data) => {
+            const workbook = XLSX.read(data, { type: "array" });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = XLSX.utils.sheet_to_json(
+              workbook.Sheets[sheetName],
+              { header: 1 }
+            );
+
+            if (worksheet.length === 0) {
+              console.error(
+                "The worksheet is empty or has incorrect data format."
+              );
+              return;
+            }
+
+            const headers = worksheet[0];
+            worksheet.slice(1).forEach((row) => {
+              const soil = row[headers.indexOf("Soil")];
+              const plant = row[headers.indexOf("Plant")];
+              const climate = row[headers.indexOf("Climate")];
+              const soilRetentionRate =
+                row[headers.indexOf("Soil Retention Rate (%)")];
+              const waterFootprint =
+                row[headers.indexOf("Water Footprint (liters/m²)")];
+              const humidity = row[headers.indexOf("Humidity (%)")];
+
+              if (soil && plant && climate) {
+                if (!soilData[soil]) soilData[soil] = [];
+                if (!climateData[soil]) climateData[soil] = [];
+                soilData[soil].push(plant);
+                climateData[soil].push(climate);
+                waterFootprintData[plant] = waterFootprint;
+                soilRetentionData[plant] = soilRetentionRate;
+                humidityData[plant] = humidity || "Unknown";
+              }
+            });
+
+            populateSoilDropdown();
+          })
+          .catch((error) =>
+            console.error("Error fetching or parsing the Excel file:", error)
+          );
+      }
+
+      function populateSoilDropdown() {
+        const soilSelect = document.getElementById("soilType");
+        Object.keys(soilData).forEach((soil) => {
+          const option = document.createElement("option");
+          option.value = soil;
+          option.text = soil.charAt(0).toUpperCase() + soil.slice(1);
+          soilSelect.add(option);
+        });
+      }
+
+      document
+        .getElementById("soilType")
+        .addEventListener("change", function () {
+          const climateSelect = document.getElementById("climateType");
+          const plantSelect = document.getElementById("plantName");
+          climateSelect.innerHTML =
+            '<option value="">--Select Climate--</option>';
+          plantSelect.innerHTML = '<option value="">--Select Plant--</option>';
+          climateSelect.disabled = true;
+          plantSelect.disabled = true;
+
+          if (this.value) {
+            const climates = [...new Set(climateData[this.value])];
+            climates.forEach((climate) => {
+              const option = document.createElement("option");
+              option.value = climate;
+              option.text = climate;
+              climateSelect.add(option);
+            });
+            climateSelect.disabled = false;
+          }
+        });
+
+      document
+        .getElementById("climateType")
+        .addEventListener("change", function () {
+          const plantSelect = document.getElementById("plantName");
+          plantSelect.innerHTML = '<option value="">--Select Plant--</option>';
+          plantSelect.disabled = true;
+
+          const selectedSoil = document.getElementById("soilType").value;
+          if (this.value && selectedSoil) {
+            const plants = [...new Set(soilData[selectedSoil])];
+            plants.forEach((plant) => {
+              const option = document.createElement("option");
+              option.value = plant;
+              option.text = plant;
+              plantSelect.add(option);
+            });
+            plantSelect.disabled = false;
+          }
+        });
+
+      document
+        .getElementById("calculate")
+        .addEventListener("click", function () {
+          const soil = document.getElementById("soilType").value;
+          const plant = document.getElementById("plantName").value;
+          const area = document.getElementById("landArea").value;
+          const outputDiv = document.getElementById("output");
+
+          if (soil && plant && area) {
+            const waterUsage = waterFootprintData[plant] * area;
+            const soilRetentionRate = soilRetentionData[plant];
+            const totalWater =
+              waterUsage + ((100 - soilRetentionRate) / 100) * waterUsage;
+            const humidity = humidityData[plant];
+
+            outputDiv.innerHTML = `
+                    <p><strong>Total Water Footprint:</strong> ${totalWater.toFixed(
+                      2
+                    )} liters</p>
+                    <p><strong>Humidity:</strong> ${humidity}%</p>
+                `;
+          } else {
+            outputDiv.textContent =
+              "Please select soil, climate, plant, and enter the area.";
+          }
+        });
+
+      loadExcelData();
+    </script>
+  </body>
+</html>
